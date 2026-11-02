@@ -20,6 +20,8 @@ class StoredChunk:
     ordinal: int
     text: str
     embedding: list[float]
+    section: str = ""
+    page: int | None = None
 
 
 @dataclass
@@ -28,6 +30,8 @@ class ChunkHit:
     text: str
     score: float
     ordinal: int
+    section: str = ""
+    page: int | None = None
 
 
 class VectorStore(Protocol):
@@ -66,6 +70,8 @@ class MemoryVectorStore:
                 text=chunk.text,
                 score=cosine(embedding, chunk.embedding),
                 ordinal=chunk.ordinal,
+                section=chunk.section,
+                page=chunk.page,
             )
             for chunk in self._chunks
             if chunk.job_id == job_id
@@ -98,10 +104,11 @@ class PgVectorStore:
                     text(
                         """
                         INSERT INTO chunks
-                            (id, job_id, source_uid, source_ref, ordinal, text, embedding)
+                            (id, job_id, source_uid, source_ref, ordinal, text, embedding,
+                             section, page)
                         VALUES
                             (:id, :job_id, :source_uid, :source_ref, :ordinal, :text,
-                             CAST(:embedding AS vector))
+                             CAST(:embedding AS vector), :section, :page)
                         """
                     ),
                     [
@@ -113,6 +120,8 @@ class PgVectorStore:
                             "ordinal": chunk.ordinal,
                             "text": chunk.text,
                             "embedding": vector_literal(chunk.embedding),
+                            "section": chunk.section[:200],
+                            "page": chunk.page,
                         }
                         for chunk in chunks
                     ],
@@ -124,7 +133,7 @@ class PgVectorStore:
             result = await session.execute(
                 text(
                     """
-                    SELECT source_uid, ordinal, text,
+                    SELECT source_uid, ordinal, text, section, page,
                            1 - (embedding <=> CAST(:embedding AS vector)) AS score
                     FROM chunks
                     WHERE job_id = :job_id
@@ -145,6 +154,8 @@ class PgVectorStore:
                 text=str(row["text"]),
                 score=float(row["score"] or 0.0),
                 ordinal=int(row["ordinal"]),
+                section=str(row["section"] or ""),
+                page=int(row["page"]) if row["page"] is not None else None,
             )
             for row in rows
         ]

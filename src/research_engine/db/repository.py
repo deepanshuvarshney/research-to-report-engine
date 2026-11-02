@@ -191,6 +191,8 @@ class PostgresJobRepository:
                     "year": str(source.get("year") or "")[:16],
                     "content": content,
                     "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+                    "text_origin": str(source.get("text_origin") or "abstract")[:16],
+                    "pdf_url": str(source.get("pdf_url") or "")[:500],
                 }
             )
         async with self._session_factory() as session:
@@ -204,11 +206,11 @@ class PostgresJobRepository:
                         """
                         INSERT INTO sources (
                             id, job_id, ref_number, source_type, title, url,
-                            authors, year, content, content_hash
+                            authors, year, content, content_hash, text_origin, pdf_url
                         )
                         VALUES (
                             :id, :job_id, :ref_number, :source_type, :title, :url,
-                            :authors, :year, :content, :content_hash
+                            :authors, :year, :content, :content_hash, :text_origin, :pdf_url
                         )
                         """
                     ),

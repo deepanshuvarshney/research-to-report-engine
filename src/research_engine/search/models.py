@@ -21,6 +21,16 @@ def make_uid(url: str, title: str) -> str:
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
+class Passage(BaseModel):
+    """One retrievable slice of a paper, with where it came from."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    text: str
+    section: str = ""
+    page: int | None = None
+
+
 class Source(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -33,9 +43,27 @@ class Source(BaseModel):
     year: str = ""
     content: str
     prompt_text: str = ""
+    text_origin: str = "abstract"
+    pdf_url: str = ""
+    arxiv_id: str = ""
+    doi: str = ""
+    page_count: int = 0
+    truncated: bool = False
+    passages: list[Passage] = Field(default_factory=list)
 
     def evidence_text(self) -> str:
         return self.prompt_text or self.content
+
+    def grounding_text(self) -> str:
+        """Abstract plus any full-text passages the writer was shown."""
+
+        content = self.content.strip()
+        prompt = self.prompt_text.strip()
+        if prompt and prompt not in content:
+            if content and content not in prompt:
+                return content + "\n" + prompt
+            return prompt
+        return content or prompt
 
     def prompt_block(self) -> str:
         body = self.evidence_text()
@@ -71,7 +99,10 @@ def dedupe_sources(sources: list[Source], limit: int) -> list[Source]:
             continue
         if title_key and title_key in seen_titles:
             continue
-        if len(source.content) < 80:
+        # A short abstract can still be worth keeping when a PDF is attached.
+        if len(source.content) < 40:
+            continue
+        if len(source.content) < 80 and not source.pdf_url and not source.arxiv_id:
             continue
         if url_key:
             seen_urls.add(url_key)

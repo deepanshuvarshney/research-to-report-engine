@@ -14,6 +14,7 @@ class Claim(BaseModel):
 
     text: str
     citations: list[int] = Field(default_factory=list)
+    locator: str = ""
 
 
 class Paragraph(BaseModel):

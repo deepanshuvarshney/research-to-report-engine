@@ -44,3 +44,4 @@ class MetaResponse(BaseModel):
     embedding_provider: str
     embedding_model: str
     max_revision_loops: int
+    demo_mode: bool = False

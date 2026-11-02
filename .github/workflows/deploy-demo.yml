@@ -1,0 +1,22 @@
+name: Deploy demo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${RENDER_DEPLOY_HOOK_URL}" ]; then
+            echo "Add the RENDER_DEPLOY_HOOK_URL repository secret."
+            echo "In Render: the vellum service, Manual Deploy, copy the Deploy Hook."
+            exit 1
+          fi
+          curl --fail --silent --show-error --request POST \
+            --output /dev/null \
+            --url "${RENDER_DEPLOY_HOOK_URL}"
+          echo "Render accepted the deploy hook."

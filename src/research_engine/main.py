@@ -28,6 +28,7 @@ from research_engine.db.session import (
     ensure_schema,
     wait_for_postgres,
 )
+from research_engine.jobs.inline import InlineJobQueue
 from research_engine.jobs.queue import ArqJobQueue
 from research_engine.jobs.service import JobService
 from research_engine.logging import configure_logging
@@ -59,18 +60,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ensure_schema(engine)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     await redis.ping()
-    pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     session_factory = create_session_factory(engine)
+    repo = PostgresJobRepository(session_factory)
+    pool = None
+    if settings.job_executor == "inline":
+        queue: ArqJobQueue | InlineJobQueue = InlineJobQueue(
+            settings=settings,
+            repo=repo,
+            redis=redis,
+            session_factory=session_factory,
+        )
+    else:
+        pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+        queue = ArqJobQueue(pool)
     service = JobService(
         settings=settings,
-        repo=PostgresJobRepository(session_factory),
-        queue=ArqJobQueue(pool),
+        repo=repo,
+        queue=queue,
         cache=RedisCache(redis),
         redis=redis,
     )
     app.state.engine = engine
     app.state.redis = redis
     app.state.arq_pool = pool
+    app.state.job_queue = queue
     app.state.job_service = service
     log.info(
         "api_started",
@@ -81,7 +94,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await _close_pool(pool)
+        job_queue = getattr(app.state, "job_queue", None)
+        if isinstance(job_queue, InlineJobQueue):
+            await job_queue.aclose()
+        if pool is not None:
+            await _close_pool(pool)
         await redis.aclose()
         await engine.dispose()
 

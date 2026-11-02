@@ -1,0 +1,10 @@
+PAGE 1
+Abstract
+Retrieval-augmented generation fetches documents at inference time and grounds the answer in those documents.
+1 Introduction
+A retriever selects passages and the generator conditions on those passages when answering a question.
+PAGE 2
+2 Experiments
+The model reduces unsupported claims when the cited passage overlaps the answer text in the paper.
+References
+Vaswani Attention Is All You Need 2017 bibliography marker must stay out of the index.

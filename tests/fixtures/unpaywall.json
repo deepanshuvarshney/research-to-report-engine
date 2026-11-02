@@ -1,0 +1,10 @@
+{
+  "doi": "10.18653/v1/2020.example",
+  "best_oa_location": {
+    "url_for_pdf": "https://publisher.example/paywall.pdf"
+  },
+  "oa_locations": [
+    {"url_for_pdf": "https://publisher.example/paywall.pdf"},
+    {"url_for_pdf": "https://arxiv.org/pdf/1706.03762.pdf"}
+  ]
+}

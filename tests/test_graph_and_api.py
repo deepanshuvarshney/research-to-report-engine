@@ -407,7 +407,13 @@ class FakeApi:
         self.event_log: dict[str, list[dict[str, Any]]] = {}
         self.keys: list[str | None] = []
 
-    async def submit(self, question: str, idempotency_key: str | None) -> dict[str, Any]:
+    async def submit(
+        self,
+        question: str,
+        idempotency_key: str | None,
+        client_ip: str = "",
+    ) -> dict[str, Any]:
+        del client_ip
         self.keys.append(idempotency_key)
         job_id = str(uuid.uuid4())
         job = {
@@ -493,7 +499,9 @@ def test_api_job_flow_and_validation() -> None:
         assert downloaded.status_code == 200
         assert "cited claim" in downloaded.text
         assert client.get("/").status_code == 200
-        assert "Vellum" in client.get("/").text
+        home = client.get("/").text
+        assert "Vellum" in home
+        assert "allowlisted" in home
 
 
 def test_api_rate_limit() -> None:

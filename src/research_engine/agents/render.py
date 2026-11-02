@@ -83,7 +83,11 @@ def render_markdown(
             if isinstance(cites, list) and cites:
                 cite_text = " " + " ".join(f"[{ref}]" for ref in cites)
             reason = str(verdict.get("reason") or "").strip()
-            lines.append(f"- **{label}**{overlap_text} — {verdict.get('text', '')}{cite_text}")
+            claim_text = str(verdict.get("text") or "")
+            locator = str(verdict.get("locator") or "").strip()
+            if locator and locator not in claim_text:
+                claim_text = f"{claim_text} ({locator})"
+            lines.append(f"- **{label}**{overlap_text} — {claim_text}{cite_text}")
             if reason:
                 lines.append(f"  - {reason}")
         lines.append("")
@@ -99,6 +103,9 @@ def render_markdown(
         if source.year:
             bits.append(f" {source.year}.")
         bits.append(f" {_TYPE_LABELS.get(source.source_type, source.source_type)}.")
+        if source.text_origin == "pdf":
+            pages = f", {source.page_count} pages" if source.page_count else ""
+            bits.append(f" Full text{pages}.")
         if source.url:
             bits.append(f" {source.url}")
         lines.append("".join(bits))
