@@ -4,7 +4,6 @@ import json
 
 import httpx
 import pytest
-from tests.conftest import make_settings
 
 from research_engine.agents.models import Plan
 from research_engine.agents.prompts import planner_messages, sources_from_prompt
@@ -23,6 +22,7 @@ from research_engine.search.semantic_scholar import parse_semantic_scholar
 from research_engine.search.service import SearchService
 from research_engine.search.terms import overlaps_topic, topic_phrase
 from research_engine.search.wikipedia import parse_wikipedia
+from tests.support import make_settings
 
 ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">

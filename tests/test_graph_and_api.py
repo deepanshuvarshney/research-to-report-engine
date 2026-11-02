@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.conftest import make_settings
 
 from research_engine.agents.graph import GraphDeps, run_research_graph
 from research_engine.agents.render import render_html, render_markdown, render_pdf
@@ -19,6 +18,7 @@ from research_engine.rag.embeddings import HashEmbedder
 from research_engine.rag.store import MemoryVectorStore
 from research_engine.search.cache import MemoryCache
 from research_engine.search.models import SearchBatch, Source
+from tests.support import make_settings
 
 ATTENTION = (
     "Attention allows a model to weigh input tokens by relevance. "
