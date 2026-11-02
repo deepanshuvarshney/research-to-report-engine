@@ -1,7 +1,7 @@
 """Fan out a question to every free source, with caching and per-host pacing.
 
-Result pages are not crawled. Each adapter returns text the API already gave us.
-That keeps the worker free of SSRF from untrusted URLs and stays inside public rate limits.
+Web result pages are not crawled. Open-access PDFs are downloaded only from an
+allowlisted set of hosts, with size caps, and failures keep the abstract.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import httpx
 import structlog
 
 from research_engine.config import Settings
+from research_engine.papers.fetch import enrich_with_fulltext
 from research_engine.search.arxiv import search_arxiv
 from research_engine.search.cache import KeyValueCache, cache_key
 from research_engine.search.duckduckgo import search_duckduckgo
@@ -38,7 +39,7 @@ class SearchService:
         self.settings = settings
         self.cache = cache
         self.limiters = dict(limiters or {})
-        self._fallback = AsyncRateLimiter(settings.search_rate_limit_rps)
+        self._local_limiters: dict[str, RateLimiter] = {}
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(settings.search_timeout_seconds, connect=10.0),
@@ -71,7 +72,17 @@ class SearchService:
                 seen_terms.add(key)
                 terms.append(term)
         focused = [source for source in kept if overlaps_topic(source, terms)]
-        return SearchBatch(sources=focused or kept, notes=notes)
+        chosen = focused or kept
+        if self.settings.fulltext_enabled:
+            chosen, note = await enrich_with_fulltext(
+                chosen,
+                client=self._client,
+                cache=self.cache,
+                settings=self.settings,
+                acquire=self._acquire,
+            )
+            notes.append(note)
+        return SearchBatch(sources=chosen, notes=notes)
 
     async def _run_provider(self, name: str, queries: list[str]) -> tuple[list[Source], str]:
         found: list[Source] = []
@@ -124,7 +135,12 @@ class SearchService:
         return sources
 
     async def _acquire(self, provider: str) -> None:
-        limiter = self.limiters.get(provider, self._fallback)
+        limiter = self.limiters.get(provider)
+        if limiter is None:
+            limiter = self._local_limiters.get(provider)
+        if limiter is None:
+            limiter = AsyncRateLimiter(self.settings.search_rate_limit_rps)
+            self._local_limiters[provider] = limiter
         await limiter.acquire()
 
     async def _fetch(self, provider: str, query: str) -> list[Source]:

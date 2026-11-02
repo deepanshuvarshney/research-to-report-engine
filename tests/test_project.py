@@ -17,6 +17,8 @@ def test_schema_covers_jobs_and_vectors() -> None:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in joined
     assert "vector(384)" in joined
     assert "hnsw" in joined
+    assert "text_origin" in joined
+    assert "ADD COLUMN IF NOT EXISTS section" in joined
 
 
 def test_settings_reject_bad_embedding_dim_and_missing_keys() -> None:
@@ -53,3 +55,14 @@ def test_compose_and_ci_exist() -> None:
     assert "mypy" in workflow
     assert "pytest" in workflow
     assert (root / ".env.example").is_file()
+    blueprint = (root / "render.yaml").read_text()
+    assert "plan: free" in blueprint
+    assert "dockerfilePath: ./deploy/render/Dockerfile" in blueprint
+    assert "autoDeployTrigger: off" in blueprint
+    entry = (root / "deploy" / "render" / "entrypoint.sh").read_text()
+    assert "JOB_EXECUTOR" in entry
+    assert "127.0.0.1" in entry
+    deploy = (root / ".github" / "workflows" / "deploy-demo.yml").read_text()
+    assert "workflow_dispatch" in deploy
+    assert "RENDER_DEPLOY_HOOK_URL" in deploy
+    assert "pypdf" in (root / "pyproject.toml").read_text()

@@ -10,6 +10,13 @@ from redis.asyncio import Redis
 
 from research_engine.agents.render import render_html, render_pdf
 from research_engine.config import Settings
+from research_engine.jobs.demo import (
+    DemoLimited,
+    DemoSlot,
+    adopt_demo_lock,
+    begin_demo_job,
+    cancel_demo_job,
+)
 from research_engine.jobs.events import channel_for, publish_event
 from research_engine.jobs.queue import JobQueue
 from research_engine.search.cache import KeyValueCache
@@ -60,7 +67,12 @@ class JobService:
         self.cache = cache
         self.redis = redis
 
-    async def submit(self, question: str, idempotency_key: str | None) -> dict[str, Any]:
+    async def submit(
+        self,
+        question: str,
+        idempotency_key: str | None,
+        client_ip: str = "",
+    ) -> dict[str, Any]:
         self.settings.require_llm_credentials()
         if idempotency_key:
             existing_id = await self.cache.get(_idem_key(idempotency_key))
@@ -68,11 +80,34 @@ class JobService:
                 existing = await self.repo.get_job(existing_id)
                 if existing is not None:
                     return existing
+        slot: DemoSlot | None = None
+        if self.settings.demo_mode:
+            if self.redis is None:
+                raise DemoLimited("Demo mode requires Redis.")
+            slot = await begin_demo_job(self.redis, self.settings, client_ip)
+        try:
+            job = await self._create_and_enqueue(question, idempotency_key, slot)
+        except Exception:
+            if slot is not None and self.redis is not None:
+                await cancel_demo_job(self.redis, slot)
+            raise
+        if slot is not None:
+            slot.settled = True
+        return job
+
+    async def _create_and_enqueue(
+        self,
+        question: str,
+        idempotency_key: str | None,
+        slot: DemoSlot | None,
+    ) -> dict[str, Any]:
         job = await self.repo.create_job(
             question=question,
             provider=self.settings.llm_provider,
             model=self.settings.resolved_model(),
         )
+        if slot is not None and self.redis is not None:
+            await adopt_demo_lock(self.redis, slot, job["id"], self.settings.job_timeout_seconds)
         await publish_event(
             self.repo,
             self.redis,

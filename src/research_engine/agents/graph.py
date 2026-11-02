@@ -30,7 +30,7 @@ from research_engine.observability.tracing import span
 from research_engine.rag.chunker import chunk_text
 from research_engine.rag.embeddings import Embedder
 from research_engine.rag.store import ChunkHit, StoredChunk, VectorStore
-from research_engine.search.models import SearchBatch, Source
+from research_engine.search.models import Passage, SearchBatch, Source
 
 log = structlog.get_logger(__name__)
 
@@ -167,42 +167,76 @@ async def index_node(state: ResearchState) -> dict[str, Any]:
     sources = _sources(state.get("sources"))
     await deps.emit("index", "index.started", f"Chunking and embedding {len(sources)} sources")
     with span("agent.index", sources=len(sources)):
-        pending: list[tuple[Source, int, str]] = []
-        for source in sources:
-            pieces = chunk_text(
-                source.content,
-                size=deps.settings.chunk_size,
-                overlap=deps.settings.chunk_overlap,
-            )
-            for ordinal, piece in enumerate(pieces):
-                pending.append((source, ordinal, piece))
-        vectors = await deps.embeddings.embed([piece for _, _, piece in pending]) if pending else []
+        pending = _passages_to_index(sources, deps)
+        vectors = await deps.embeddings.embed([item.text for item in pending]) if pending else []
         chunks = [
             StoredChunk(
                 job_id=state["job_id"],
-                source_uid=source.uid,
+                source_uid=item.source.uid,
                 source_ref=index,
-                ordinal=ordinal,
-                text=piece,
+                ordinal=item.ordinal,
+                text=item.text,
                 embedding=vector,
+                section=item.section,
+                page=item.page,
             )
-            for index, ((source, ordinal, piece), vector) in enumerate(
-                zip(pending, vectors, strict=True),
-                start=1,
-            )
+            for index, (item, vector) in enumerate(zip(pending, vectors, strict=True), start=1)
         ]
         await deps.vectors.replace(state["job_id"], chunks)
         selected = await _select_sources(state, sources, deps)
+    pdf_count = sum(1 for source in sources if source.text_origin == "pdf")
     await deps.emit(
         "index",
         "index.completed",
-        f"Indexed {len(chunks)} chunks; writer will see {len(selected)} sources",
-        {"chunk_count": len(chunks), "source_count": len(selected)},
+        f"Indexed {len(chunks)} chunks from {len(sources)} sources "
+        f"({pdf_count} full text); writer will see {len(selected)}",
+        {"chunk_count": len(chunks), "source_count": len(selected), "fulltext_count": pdf_count},
     )
     return {
         "selected_sources": [source.model_dump() for source in selected],
         "chunk_count": len(chunks),
     }
+
+
+@dataclass
+class _IndexPiece:
+    source: Source
+    ordinal: int
+    text: str
+    section: str
+    page: int | None
+
+
+def _passages_to_index(sources: list[Source], deps: GraphDeps) -> list[_IndexPiece]:
+    pending: list[_IndexPiece] = []
+    for source in sources:
+        pieces = _source_pieces(source, deps)
+        for ordinal, piece in enumerate(pieces):
+            pending.append(
+                _IndexPiece(
+                    source=source,
+                    ordinal=ordinal,
+                    text=piece.text,
+                    section=piece.section,
+                    page=piece.page,
+                )
+            )
+    return pending
+
+
+def _source_pieces(source: Source, deps: GraphDeps) -> list[Passage]:
+    if source.passages:
+        return [passage for passage in source.passages if passage.text.strip()][
+            : deps.settings.fulltext_max_chunks
+        ]
+    return [
+        Passage(text=piece)
+        for piece in chunk_text(
+            source.content,
+            size=deps.settings.chunk_size,
+            overlap=deps.settings.chunk_overlap,
+        )
+    ]
 
 
 async def _select_sources(
@@ -211,7 +245,7 @@ async def _select_sources(
     deps: GraphDeps,
 ) -> list[Source]:
     scores: dict[str, float] = defaultdict(float)
-    extras: dict[str, list[tuple[float, str]]] = defaultdict(list)
+    hit_map: dict[str, list[ChunkHit]] = defaultdict(list)
     for subquestion in state.get("sub_questions") or [state["question"]]:
         embedding = (await deps.embeddings.embed([subquestion]))[0]
         hits: list[ChunkHit] = await deps.vectors.search(
@@ -221,20 +255,71 @@ async def _select_sources(
         )
         for hit in hits:
             scores[hit.source_uid] += hit.score
-            extras[hit.source_uid].append((hit.score, hit.text))
+            hit_map[hit.source_uid].append(hit)
 
     if scores and max(scores.values()) > 0:
         ranked = sorted(sources, key=lambda source: scores.get(source.uid, 0.0), reverse=True)
     else:
         ranked = list(sources)
     chosen = ranked[: deps.settings.max_sources_for_writer]
-    limit = deps.settings.source_prompt_chars
     prepared: list[Source] = []
     for ref, source in enumerate(chosen, start=1):
-        ranked_chunks = [text for _score, text in sorted(extras[source.uid], reverse=True)]
-        prompt_text = _prompt_text(source.content, ranked_chunks, limit)
+        limit = (
+            deps.settings.fulltext_prompt_chars
+            if source.text_origin == "pdf"
+            else deps.settings.source_prompt_chars
+        )
+        ranked_hits = sorted(hit_map[source.uid], key=lambda hit: hit.score, reverse=True)
+        if source.text_origin == "pdf":
+            prompt_text = _pdf_prompt(source, ranked_hits, limit)
+        else:
+            prompt_text = _prompt_text(source.content, [hit.text for hit in ranked_hits], limit)
         prepared.append(source.model_copy(update={"ref": ref, "prompt_text": prompt_text}))
     return prepared
+
+
+def _locator(section: str, page: int | None) -> str:
+    bits: list[str] = []
+    if section.strip():
+        bits.append(section.strip())
+    if page:
+        bits.append(f"p. {page}")
+    if not bits:
+        return ""
+    return "[" + " - ".join(bits) + "] "
+
+
+def _pdf_prompt(source: Source, hits: list[ChunkHit], limit: int) -> str:
+    """Show retrieved passages first so the writer can cite a section and page."""
+
+    parts: list[str] = []
+    used = 0
+    seen: set[str] = set()
+
+    def add(section: str, page: int | None, text: str) -> bool:
+        nonlocal used
+        body = " ".join(text.split())
+        if not body or body in seen:
+            return True
+        labeled = _locator(section, page) + body
+        remaining = limit - used
+        if remaining < 80:
+            return False
+        snippet = labeled[:remaining].strip()
+        parts.append(snippet)
+        seen.add(body)
+        used += len(snippet) + 1
+        return True
+
+    pool: list[tuple[str, int | None, str]] = [(hit.section, hit.page, hit.text) for hit in hits]
+    if not pool:
+        pool = [(passage.section, passage.page, passage.text) for passage in source.passages]
+    for section, page, text in pool:
+        if not add(section, page, text):
+            break
+    if source.content and used + 80 < limit:
+        add("Abstract", 1, source.content[:500])
+    return "\n".join(parts)
 
 
 def _prompt_text(content: str, chunks: list[str], limit: int) -> str:
@@ -361,7 +446,7 @@ def _apply_verdicts(
     sources: list[Source],
 ) -> list[dict[str, Any]]:
     by_text = {verdict.claim.strip(): verdict for verdict in critique.verdicts if verdict.claim}
-    evidence = {source.ref: source.content for source in sources}
+    evidence = {source.ref: source.grounding_text() for source in sources}
     merged: list[dict[str, Any]] = []
     for index, claim in enumerate(claims):
         verdict = None
@@ -397,6 +482,7 @@ def _apply_verdicts(
                 "supported": supported,
                 "reason": reason,
                 "overlap": round(ratio, 4),
+                "locator": claim.locator,
             }
         )
     return merged

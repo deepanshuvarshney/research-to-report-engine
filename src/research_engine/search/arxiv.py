@@ -1,4 +1,4 @@
-"""arXiv Atom API. Abstracts only — we do not download PDFs."""
+"""arXiv Atom API. The PDF URL is recorded here; the download happens later, if allowed."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
+from research_engine.papers.urls import arxiv_id_from_url, arxiv_pdf_url
 from research_engine.search.models import Source, clean_text, make_uid
 from research_engine.search.terms import content_terms
 
@@ -49,6 +50,7 @@ def parse_arxiv(xml_text: str, *, content_limit: int) -> list[Source]:
             for author in entry.findall("a:author", _ATOM)
             if (author.findtext("a:name", default="", namespaces=_ATOM) or "").strip()
         )
+        arxiv_id = arxiv_id_from_url(url)
         sources.append(
             Source(
                 uid=make_uid(url, title),
@@ -58,6 +60,8 @@ def parse_arxiv(xml_text: str, *, content_limit: int) -> list[Source]:
                 authors=authors[:240],
                 year=published[:4],
                 content=summary,
+                arxiv_id=arxiv_id,
+                pdf_url=arxiv_pdf_url(arxiv_id),
             )
         )
     return sources

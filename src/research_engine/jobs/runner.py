@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from research_engine.agents.graph import GraphDeps, run_research_graph
 from research_engine.config import Settings
 from research_engine.db.repository import PostgresJobRepository
+from research_engine.jobs.demo import release_demo_lock
 from research_engine.jobs.events import publish_event
 from research_engine.llm.base import LLMProvider
 from research_engine.llm.factory import build_llm
@@ -23,7 +24,15 @@ from research_engine.search.service import SearchService
 
 log = structlog.get_logger(__name__)
 
-_SEARCH_PROVIDERS = ("arxiv", "semantic_scholar", "wikipedia", "web")
+_SEARCH_PROVIDERS = (
+    "arxiv",
+    "semantic_scholar",
+    "wikipedia",
+    "web",
+    "arxiv-pdf",
+    "unpaywall",
+    "oa-pdf",
+)
 
 
 def build_search(settings: Settings, redis: Redis) -> SearchService:
@@ -86,6 +95,7 @@ async def execute_job(
             "sub_questions": list(result.get("sub_questions") or []),
             "plan_rationale": result.get("plan_rationale") or "",
             "source_count": len(selected),
+            "fulltext_count": sum(1 for source in selected if source.get("text_origin") == "pdf"),
             "chunk_count": int(result.get("chunk_count") or 0),
             "revisions": int(result.get("revision") or 0),
             "claim_count": len(verdicts),
@@ -122,6 +132,11 @@ async def execute_job(
         except Exception:
             log.exception("job_failure_record_failed")
     finally:
+        if settings.demo_mode:
+            try:
+                await release_demo_lock(redis, job_id)
+            except Exception:
+                log.warning("demo_lock_release_failed")
         structlog.contextvars.unbind_contextvars("job_id")
 
 

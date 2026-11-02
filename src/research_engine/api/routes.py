@@ -11,10 +11,11 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from research_engine import __version__
-from research_engine.api.limiter import enforce_rate_limit
+from research_engine.api.limiter import client_ip, enforce_rate_limit
 from research_engine.api.schemas import CreateJobRequest, JobResponse, MetaResponse
 from research_engine.config import Settings
 from research_engine.examples import EXAMPLES
+from research_engine.jobs.demo import DemoLimited
 from research_engine.jobs.service import JobService, QueueUnavailable
 
 router = APIRouter(prefix="/api")
@@ -67,6 +68,7 @@ async def meta(request: Request) -> MetaResponse:
         embedding_provider=settings.embedding_provider,
         embedding_model=embedding_model,
         max_revision_loops=settings.max_revision_loops,
+        demo_mode=settings.demo_mode,
     )
 
 
@@ -87,7 +89,9 @@ async def create_job(
     await enforce_rate_limit(request, "jobs", settings.job_rate_limit_per_minute)
     key = _clean_idempotency_key(idempotency_key)
     try:
-        job = await _service(request).submit(payload.question, key)
+        job = await _service(request).submit(payload.question, key, client_ip(request))
+    except DemoLimited as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except QueueUnavailable as exc:

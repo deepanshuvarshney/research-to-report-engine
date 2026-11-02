@@ -6,7 +6,10 @@ from typing import Any
 
 import httpx
 
+from research_engine.papers.urls import arxiv_pdf_url, url_is_allowed
 from research_engine.search.models import Source, clean_text, make_uid
+
+FIELDS = "title,abstract,url,year,authors,externalIds,openAccessPdf"
 
 
 def parse_semantic_scholar(payload: dict[str, Any], *, content_limit: int) -> list[Source]:
@@ -32,6 +35,17 @@ def parse_semantic_scholar(payload: dict[str, Any], *, content_limit: int) -> li
             if isinstance(author, dict) and author.get("name")
         )
         year = str(item.get("year") or "")
+        doi = external.get("DOI")
+        doi_text = doi.strip() if isinstance(doi, str) else ""
+        arxiv_raw = external.get("ArXiv")
+        arxiv_id = arxiv_raw.strip() if isinstance(arxiv_raw, str) else ""
+        open_access = item.get("openAccessPdf")
+        oa_url = ""
+        if isinstance(open_access, dict):
+            candidate = str(open_access.get("url") or "")
+            if url_is_allowed(candidate):
+                oa_url = candidate
+        pdf_url = oa_url or arxiv_pdf_url(arxiv_id)
         sources.append(
             Source(
                 uid=make_uid(url, title),
@@ -41,6 +55,9 @@ def parse_semantic_scholar(payload: dict[str, Any], *, content_limit: int) -> li
                 authors=authors[:240],
                 year=year[:16],
                 content=abstract,
+                pdf_url=pdf_url,
+                arxiv_id=arxiv_id,
+                doi=doi_text,
             )
         )
     return sources
@@ -60,7 +77,7 @@ async def search_semantic_scholar(
         params={
             "query": query[:240],
             "limit": limit,
-            "fields": "title,abstract,url,year,authors,externalIds",
+            "fields": FIELDS,
         },
         headers=headers,
     )

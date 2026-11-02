@@ -34,6 +34,7 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http>=1.27.0",
   "markdown>=3.7",
   "fpdf2>=2.8.0",
+  "pypdf>=5.1.0",
 ]
 
 [project.optional-dependencies]
@@ -88,5 +89,5 @@ warn_return_any = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = ["langgraph.*", "arq.*", "fastembed.*", "pgvector.*", "fpdf.*", "markdown.*"]
+module = ["langgraph.*", "arq.*", "fastembed.*", "pgvector.*", "fpdf.*", "markdown.*", "pypdf.*"]
 ignore_missing_imports = true

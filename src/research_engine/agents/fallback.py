@@ -46,6 +46,9 @@ def heuristic_plan(question: str, max_n: int) -> dict[str, Any]:
     }
 
 
+_LOCATOR = re.compile(r"^\[([^\]\n]{1,80})\]\s+")
+
+
 def excerpt(text: str, limit: int = 320) -> str:
     """A short exact substring, so the faithfulness check can verify the quote."""
 
@@ -67,9 +70,11 @@ def extractive_draft(question: str, sources: list[Source]) -> Draft:
         quote = excerpt(source.evidence_text())
         if len(quote) < 40:
             continue
+        locator_match = _LOCATOR.match(quote)
+        locator = locator_match.group(1).strip() if locator_match else ""
         paragraph = Paragraph(text=quote, citations=[source.ref])
         grouped.setdefault(_HEADINGS.get(source.source_type, "Sources"), []).append(paragraph)
-        claims.append(Claim(text=quote, citations=[source.ref]))
+        claims.append(Claim(text=quote, citations=[source.ref], locator=locator))
 
     sections = [
         Section(heading=heading, paragraphs=paragraphs) for heading, paragraphs in grouped.items()
@@ -90,10 +95,7 @@ def extractive_draft(question: str, sources: list[Source]) -> Draft:
 
 
 def heuristic_verdicts(claims: list[Claim], sources: list[Source]) -> Critique:
-    evidence = {
-        source.ref: "\n".join(part for part in (source.content, source.prompt_text) if part)
-        for source in sources
-    }
+    evidence = {source.ref: source.grounding_text() for source in sources}
     verdicts = []
     unsupported: list[str] = []
     for claim in claims:

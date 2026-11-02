@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProviderName = Literal["groq", "gemini", "ollama", "mock"]
 EmbeddingProviderName = Literal["fastembed", "hash"]
+JobExecutorName = Literal["arq", "inline"]
 
 _DEFAULT_MODELS: dict[str, str] = {
     "groq": "llama-3.1-8b-instant",
@@ -60,6 +61,7 @@ class Settings(BaseSettings):
     retrieval_k: int = 6
     source_store_chars: int = 4000
     source_prompt_chars: int = 1600
+    fulltext_prompt_chars: int = 2200
 
     search_rate_limit_rps: float = 1.0
     search_timeout_seconds: float = 20.0
@@ -69,11 +71,27 @@ class Settings(BaseSettings):
         "+https://github.com/deepanshuvarshney/research-to-report-engine)"
     )
     semantic_scholar_api_key: str = Field(default="", repr=False)
+    unpaywall_email: str = ""
+
+    fulltext_enabled: bool = True
+    fulltext_max_pdfs: int = 4
+    fulltext_max_attempts: int = 6
+    fulltext_max_pages: int = 20
+    fulltext_max_bytes: int = 12_000_000
+    fulltext_max_chars: int = 60_000
+    fulltext_max_chunks: int = 36
+    fulltext_timeout_seconds: float = 25.0
+    fulltext_failure_ttl_seconds: int = 3600
 
     job_timeout_seconds: int = 600
     worker_max_jobs: int = 2
+    job_executor: JobExecutorName = "arq"
     api_rate_limit_per_minute: int = 60
     job_rate_limit_per_minute: int = 6
+
+    demo_mode: bool = False
+    demo_max_jobs_per_hour: int = 8
+    demo_max_jobs_per_ip_per_hour: int = 3
 
     otel_enabled: bool = False
     otel_exporter_otlp_endpoint: str = ""
@@ -108,6 +126,75 @@ class Settings(BaseSettings):
         if value < 1:
             raise ValueError("limits must be at least 1")
         return value
+
+    @field_validator("fulltext_max_pdfs", "fulltext_max_attempts", "fulltext_max_chunks")
+    @classmethod
+    def non_negative_cap(cls, value: int) -> int:
+        if value < 0 or value > 40:
+            raise ValueError("full-text caps must be between 0 and 40")
+        return value
+
+    @field_validator("fulltext_max_pages")
+    @classmethod
+    def page_cap(cls, value: int) -> int:
+        if value < 1 or value > 40:
+            raise ValueError("FULLTEXT_MAX_PAGES must be between 1 and 40")
+        return value
+
+    @field_validator("fulltext_max_bytes")
+    @classmethod
+    def byte_cap(cls, value: int) -> int:
+        if value < 50_000 or value > 20_000_000:
+            raise ValueError("FULLTEXT_MAX_BYTES must be between 50000 and 20000000")
+        return value
+
+    @field_validator("fulltext_max_chars", "fulltext_prompt_chars")
+    @classmethod
+    def char_cap(cls, value: int) -> int:
+        if value < 400 or value > 200_000:
+            raise ValueError("full-text character caps are out of range")
+        return value
+
+    @field_validator("fulltext_timeout_seconds")
+    @classmethod
+    def fulltext_timeout(cls, value: float) -> float:
+        if value < 3 or value > 60:
+            raise ValueError("FULLTEXT_TIMEOUT_SECONDS must be between 3 and 60")
+        return value
+
+    @field_validator("demo_max_jobs_per_hour", "demo_max_jobs_per_ip_per_hour")
+    @classmethod
+    def demo_quota(cls, value: int) -> int:
+        if value < 1 or value > 100:
+            raise ValueError("demo job quotas must be between 1 and 100")
+        return value
+
+    @model_validator(mode="after")
+    def clamp_public_demo(self) -> Self:
+        """Public demo ceilings stay in code so a loose env file cannot lift them."""
+
+        if not self.demo_mode:
+            return self
+        self.worker_max_jobs = min(self.worker_max_jobs, 1)
+        self.max_subquestions = min(self.max_subquestions, 2)
+        self.max_results_per_provider = min(self.max_results_per_provider, 2)
+        self.max_sources_total = min(self.max_sources_total, 8)
+        self.max_sources_for_writer = min(self.max_sources_for_writer, 4, self.max_sources_total)
+        self.max_revision_loops = min(self.max_revision_loops, 1)
+        self.job_timeout_seconds = min(self.job_timeout_seconds, 300)
+        self.job_rate_limit_per_minute = min(self.job_rate_limit_per_minute, 2)
+        self.api_rate_limit_per_minute = min(self.api_rate_limit_per_minute, 30)
+        self.llm_max_tokens = min(self.llm_max_tokens, 2048)
+        self.fulltext_max_pdfs = min(self.fulltext_max_pdfs, 2)
+        self.fulltext_max_attempts = min(self.fulltext_max_attempts, 4)
+        self.fulltext_max_pages = min(self.fulltext_max_pages, 16)
+        self.fulltext_max_bytes = min(self.fulltext_max_bytes, 8_000_000)
+        self.fulltext_max_chars = min(self.fulltext_max_chars, 40_000)
+        self.fulltext_max_chunks = min(self.fulltext_max_chunks, 24)
+        self.fulltext_timeout_seconds = min(self.fulltext_timeout_seconds, 20.0)
+        self.demo_max_jobs_per_hour = min(self.demo_max_jobs_per_hour, 12)
+        self.demo_max_jobs_per_ip_per_hour = min(self.demo_max_jobs_per_ip_per_hour, 4)
+        return self
 
     def resolved_model(self) -> str:
         if self.llm_model.strip():

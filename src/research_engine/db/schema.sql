@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS sources (
     year VARCHAR(16) NOT NULL DEFAULT '',
     content TEXT NOT NULL,
     content_hash VARCHAR(64) NOT NULL,
+    text_origin VARCHAR(16) NOT NULL DEFAULT 'abstract',
+    pdf_url TEXT NOT NULL DEFAULT '',
     UNIQUE (job_id, ref_number)
 );
 
@@ -52,10 +54,17 @@ CREATE TABLE IF NOT EXISTS chunks (
     source_ref INTEGER NOT NULL DEFAULT 0,
     ordinal INTEGER NOT NULL,
     text TEXT NOT NULL,
-    embedding vector(384) NOT NULL
+    embedding vector(384) NOT NULL,
+    section TEXT NOT NULL DEFAULT '',
+    page INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS chunks_job_idx ON chunks (job_id);
 
 CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw
     ON chunks USING hnsw (embedding vector_cosine_ops);
+
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS text_origin VARCHAR(16) NOT NULL DEFAULT 'abstract';
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS pdf_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS section TEXT NOT NULL DEFAULT '';
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS page INTEGER;

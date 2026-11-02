@@ -31,11 +31,22 @@ async function boot() {
     fetchJson("/api/examples"),
   ]);
   if (meta) {
-    providerEl.textContent = `${meta.llm_provider} · ${meta.llm_model} · ${meta.embedding_provider}`;
+    const mode = meta.demo_mode ? "demo · " : "";
+    providerEl.textContent = `${mode}${meta.llm_provider} · ${meta.llm_model} · ${meta.embedding_provider}`;
+    const notes = [];
+    if (meta.demo_mode) {
+      notes.push(
+        "Public demo. One job at a time, a few jobs per hour, and only a couple of open-access papers are read in full. The service sleeps when idle, and reports disappear when it does.",
+      );
+    }
     if (meta.llm_provider === "mock") {
+      notes.push(
+        "Extractive mock writer is on, so claims quote the sources. Set LLM_PROVIDER to groq, gemini, or ollama for a written synthesis. Search still uses the live free APIs.",
+      );
+    }
+    if (notes.length) {
       bannerEl.hidden = false;
-      bannerEl.textContent =
-        "Extractive mock writer is on, so claims quote the sources. Set LLM_PROVIDER to groq, gemini, or ollama for a written synthesis. Search still uses the live free APIs.";
+      bannerEl.textContent = notes.join(" ");
     }
   }
   for (const example of examples?.examples || []) {
