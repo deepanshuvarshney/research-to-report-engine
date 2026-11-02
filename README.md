@@ -1,6 +1,6 @@
 # Vellum
 
-[![Live demo](https://img.shields.io/badge/Live%20demo-placeholder-6b7280)](https://YOUR-SERVICE.onrender.com)
+[![Live demo](https://img.shields.io/badge/Live%20demo-online-1e4d3a)](https://vellum-r8xa.onrender.com)
 
 Vellum is a multi-agent research-to-report engine. You ask a question. A planner splits it, searchers read papers and the web in parallel, a writer drafts a structured report with inline citations, and a critic checks every claim against the cited source text. Unsupported claims go back to the writer, up to a fixed number of times. The finished report is Markdown, HTML, or PDF.
 
@@ -94,7 +94,7 @@ Optional tracing: `docker compose --profile obs up` starts [Phoenix](https://git
 
 The public demo is one free [Render](https://render.com) web service. The image in `deploy/render/Dockerfile` runs Postgres with pgvector, Redis, and the API in a single container. Jobs run inline in that process (`JOB_EXECUTOR=inline`) so a second free instance is not required. `DEMO_MODE=true` clamps concurrency, source counts, PDF size, and how many jobs the whole demo will accept per hour.
 
-The badge above is a placeholder. After the first deploy, point it at the service URL Render prints, usually `https://vellum.onrender.com` or `https://vellum-xxxx.onrender.com`.
+The live demo is [https://vellum-r8xa.onrender.com](https://vellum-r8xa.onrender.com). The free instance may take about 50 seconds to wake up after it has been idle. It runs with `LLM_PROVIDER=mock` until real keys are added in the Render dashboard.
 
 ### Why this host
 
@@ -116,7 +116,7 @@ Render sometimes asks for a card as a reversed authorization when it is checking
    - `SEMANTIC_SCHOLAR_API_KEY` from the [Semantic Scholar key form](https://www.semanticscholar.org/product/api#api-key-form), or `unused`
    - `UNPAYWALL_EMAIL`, a real email address if you want DOI lookup, or `unused`
 5. Confirm the service plan is **Free** and deploy. The first build installs Python into the pgvector image, so it takes longer than a later restart.
-6. Copy the service URL. Replace `https://YOUR-SERVICE.onrender.com` on the badge at the top of this file.
+6. The running service is [https://vellum-r8xa.onrender.com](https://vellum-r8xa.onrender.com). The badge at the top of this file points there.
 7. Optional: in the Render service, open **Settings → Deploy Hook**, copy the URL, and save it as the GitHub Actions secret `RENDER_DEPLOY_HOOK_URL`. Later deploys are **Actions → Deploy demo → Run workflow**. Auto-deploy is off, so a push to `main` does not spend build minutes by itself.
 8. Optional, once you trust the quota: in Render, set `LLM_PROVIDER` to `groq` or `gemini` and replace `unused` with the real key. Redeploy from the dashboard or the workflow.
 
@@ -141,7 +141,7 @@ These ceilings are in code when `DEMO_MODE=true`. Raising the environment variab
 
 Known limits of the free instance itself:
 
-- The service sleeps after about 15 minutes without a request. The next visit waits about a minute while Render starts it, then the container initializes Postgres. Reports stored on disk are gone after a sleep or a redeploy.
+- The service sleeps after about 15 minutes without a request. The next visit waits about 50 seconds while Render starts it, then the container initializes Postgres. Reports stored on disk are gone after a sleep or a redeploy.
 - 512 MB is shared by Postgres, Redis, and Python. Embeddings stay on the hashing embedder. fastembed is not installed in this image.
 - 750 free instance hours per workspace per month. A demo that sleeps most of the day stays inside that. A demo that is busy all month can be suspended until the hours reset.
 - There is still no login. The hourly cap is what protects a free Groq or Gemini key. The per-IP cap uses `X-Forwarded-For` and is easier to spoof than the global cap.
