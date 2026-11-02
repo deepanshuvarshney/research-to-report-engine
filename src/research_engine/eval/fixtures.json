@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "id": "exact-excerpt",
+      "claim": "Attention allows a model to weigh input tokens by relevance.",
+      "citations": [1],
+      "sources": [
+        {
+          "ref": 1,
+          "content": "Attention allows a model to weigh input tokens by relevance when predicting the next token."
+        }
+      ],
+      "expect_supported": true
+    },
+    {
+      "id": "paraphrase-with-overlap",
+      "claim": "Self-attention lets tokens interact in parallel without recurrence.",
+      "citations": [1],
+      "sources": [
+        {
+          "ref": 1,
+          "content": "Transformers replace recurrence with self-attention and allow tokens to interact in parallel."
+        }
+      ],
+      "expect_supported": true
+    },
+    {
+      "id": "unrelated-claim",
+      "claim": "The moon landing was filmed on a soundstage in secret.",
+      "citations": [1],
+      "sources": [
+        {
+          "ref": 1,
+          "content": "Transformers use self-attention to model dependencies between tokens."
+        }
+      ],
+      "expect_supported": false
+    },
+    {
+      "id": "missing-citation",
+      "claim": "Transformers use self-attention to model dependencies between tokens.",
+      "citations": [],
+      "sources": [
+        {
+          "ref": 1,
+          "content": "Transformers use self-attention to model dependencies between tokens."
+        }
+      ],
+      "expect_supported": false
+    },
+    {
+      "id": "citation-not-in-sources",
+      "claim": "Transformers use self-attention to model dependencies between tokens.",
+      "citations": [9],
+      "sources": [
+        {
+          "ref": 1,
+          "content": "Transformers use self-attention to model dependencies between tokens."
+        }
+      ],
+      "expect_supported": false
+    }
+  ]
+}

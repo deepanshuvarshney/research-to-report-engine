@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vellum — research to report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,640&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%231e4d3a' width='32' height='32' rx='4'/%3E%3Cpath d='M8 7h12l4 4v14H8z' fill='%23fbf8f1'/%3E%3Cpath d='M20 7v4h4' fill='none' stroke='%231e4d3a' stroke-width='1.4'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark">Vellum</span>
+      <span class="tag">Research to report</span>
+    </div>
+    <p id="provider" class="pill">loading runtime</p>
+  </header>
+
+  <main>
+    <p class="lede">
+      Ask a question. A planner splits it, searchers read papers and the web,
+      a writer drafts cited claims, and a critic sends unsupported ones back.
+    </p>
+    <p id="banner" class="banner" hidden></p>
+
+    <section class="composer">
+      <label for="question">Research question</label>
+      <textarea id="question" rows="3" maxlength="800" placeholder="What do you want sourced?"></textarea>
+      <div id="chips" class="chips"></div>
+      <div class="actions">
+        <button id="run" type="button">Run research</button>
+        <p id="hint" class="hint">Enter submits. Nothing here calls a paid API.</p>
+      </div>
+    </section>
+
+    <section id="recent-wrap" class="recent-wrap" hidden>
+      <h2>Recent</h2>
+      <ul id="recent" class="recent"></ul>
+    </section>
+
+    <section id="workspace" class="workspace" hidden>
+      <aside>
+        <h2>Agents</h2>
+        <ol id="timeline" class="timeline"></ol>
+      </aside>
+      <article class="sheet" id="sheet">
+        <p class="waiting">Waiting for the first agent.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <p>Local stack. Sources are arXiv, Semantic Scholar, Wikipedia, and DuckDuckGo snippets. Reports stay on this machine.</p>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>
