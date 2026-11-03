@@ -13,7 +13,7 @@ EmbeddingProviderName = Literal["fastembed", "hash"]
 JobExecutorName = Literal["arq", "inline"]
 
 _DEFAULT_MODELS: dict[str, str] = {
-    "groq": "llama-3.1-8b-instant",
+    "groq": "openai/gpt-oss-20b",
     "gemini": "gemini-2.0-flash",
     "ollama": "llama3.2",
     "mock": "mock-extractive",

@@ -186,7 +186,7 @@ Every setting is an environment variable. `.env.example` lists them. Empty value
 | Variable | Default | Role |
 | --- | --- | --- |
 | `LLM_PROVIDER` | `mock` | `groq`, `gemini`, `ollama`, or `mock` |
-| `LLM_MODEL` | provider default | Groq `llama-3.1-8b-instant`, Gemini `gemini-2.0-flash`, Ollama `llama3.2` |
+| `LLM_MODEL` | provider default | Groq `openai/gpt-oss-20b`, Gemini `gemini-2.0-flash`, Ollama `llama3.2` |
 | `EMBEDDING_PROVIDER` | `hash` | `hash` or `fastembed` |
 | `MAX_REVISION_LOOPS` | `2` | Extra writer passes after the first draft |
 | `SEARCH_RATE_LIMIT_RPS` | `1` | Shared per-host cap across workers, including PDF hosts |
